@@ -67,8 +67,6 @@ export default function FriendsSection() {
     };
   }, []);
 
-  const router = useRouter();
-
   const handleFriendClick = async (friend: Friend, opts?: { forceNew?: boolean }) => {
     const forceNew = opts?.forceNew === true;
     try {
@@ -82,14 +80,16 @@ export default function FriendsSection() {
       if (!response.ok) {
         console.error("Error starting conversation:", response.status, data);
         alert(`Error: ${data.error || "Unable to open chat"}`);
-        return;
+        return null;
       }
 
       const cid = String(data.conversation_id);
-      router.push(`/?c=${encodeURIComponent(cid)}`);
+      // Return the created/selected conversation id to the caller so it can navigate.
+      return cid;
     } catch (error) {
       console.error("Failed to start conversation:", error);
       alert("Unable to open chat. Please try again.");
+      return null;
     }
   };
 

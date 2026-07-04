@@ -13,7 +13,11 @@ type Friend = {
 interface FriendsListProps {
   friends: Friend[];
   // second param allows callers to request a fresh conversation
-  onFriendClick?: (friend: Friend, opts?: { forceNew?: boolean }) => void;
+  // the handler may return the conversation id when created/opened
+  onFriendClick?: (
+    friend: Friend,
+    opts?: { forceNew?: boolean }
+  ) => Promise<string | null> | string | null | void;
 }
 
 export default function FriendsList({ friends, onFriendClick }: FriendsListProps) {
@@ -154,10 +158,19 @@ export default function FriendsList({ friends, onFriendClick }: FriendsListProps
                         cursor: "pointer",
                       }}
                       onClick={async () => {
-                        setOpenMenuFor(null);
-                        // delegate to parent handler to create/open conversation
-                        onFriendClick?.(friend, { forceNew: true });
-                      }}
+                          setOpenMenuFor(null);
+                          // delegate to parent handler to create/open conversation
+                          try {
+                            const result = await onFriendClick?.(friend, { forceNew: true });
+                            const cid = result ? String(result) : null;
+                            if (cid) {
+                              // navigate directly to the newly created conversation
+                              router.push(`/?c=${encodeURIComponent(cid)}`);
+                            }
+                          } catch (err) {
+                            console.error('Error starting conversation from menu', err);
+                          }
+                        }}
                     >
                       Start conversation
                     </button>
