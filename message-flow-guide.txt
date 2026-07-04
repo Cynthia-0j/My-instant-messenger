@@ -1,0 +1,56 @@
+Messaging flow — step-by-step (typing, sending, receiving)
+
+Overview
+This guide explains, in simple steps, what happens when a user types, sends, and receives messages in your app. It shows what runs in the browser, what runs on the server, and where realtime events come from.
+
+1) Type a message (client)
+- The user types text into the MessageInput component.
+- The component validates: the message is not empty and a conversationId exists.
+
+2) Send request from client (client → server)
+- MessageInput sends a POST request to `/api/messages` with a JSON body: { conversation_id, content }.
+- The browser sends cookies so the server can authenticate the user.
+
+3) Server receives the POST (server)
+- The route handler reads the session (via the Supabase server client) to identify the current user.
+- The server validates the incoming `conversation_id` (simple format check) and that `content` is present.
+- The server verifies the user is a member of the conversation by querying `conversation_members`.
+  - If the check fails, the server returns a 403 with diagnostic details.
+  - If the check passes, the server proceeds.
+
+4) Insert message into the database (server → DB)
+- The server inserts a new row into `messages` with: conversation_id, sender_id, content, created_at.
+- The server responds to the client (usually with success and the new message id or 201 status).
+
+5) Supabase broadcasts realtime events (DB → clients)
+- If Realtime is enabled for the `messages` table, Supabase emits a `INSERT` event for the new row.
+- Connected clients subscribed to `messages` (optionally filtered by conversation_id) receive that event.
+
+6) Client subscription receives event (client)
+- The `MessageList` client component creates an anonymous Supabase client and subscribes to `postgres_changes` for `INSERT` on `messages`.
+- The subscription uses a filter: `conversation_id=eq.{conversationId}` so only relevant chat updates arrive.
+- When a payload arrives the handler appends `payload.new` to the local `messages` state.
+
+7) UI updates and scrolls (client)
+- React re-renders `MessageList` showing the new message.
+- An effect scrolls the messages container to the bottom so the newest message is visible.
+
+Common failure points and how to check them
+- Hydration mismatch (server vs client rendering differences): Use deterministic formatting for dates (explicit locale/options) or render times only on the client. Check the browser console for hydration warnings.
+- 403 "Not a member": Inspect the `POST /api/messages` network response. The route may include `details` that show `conversation_id`, `memberCheck` and `memberError` to diagnose why the membership query failed.
+- Realtime subscription doesn’t receive events: check the console logs in `MessageList` for subscription status (SUBSCRIBED) and payload logs. Verify Supabase Realtime is enabled for `public.messages` and RLS policies allow event broadcasting.
+- Env variables: ensure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are present in your environment so the client can connect.
+
+Quick debugging checklist
+- Open two browser windows logged in as two different users.
+- Start a DM and load the conversation in both windows.
+- Send a message from window A; confirm window B receives a realtime payload and shows the message.
+- If not, inspect these things: server POST response, subscription logs, websocket frames in DevTools, Supabase project's realtime settings.
+
+Summary (one-line)
+Type -> client POST -> server validate & insert -> Supabase emits INSERT -> subscribed clients receive payload -> UI appends message and scrolls.
+
+If you want, I can:
+- Add a small diagram (text) showing the flow.
+- Create a second file with exact debug commands and sample network payloads to inspect.
+- Add short explanations inline in your `MessageInput`, `MessageList`, and API route files to help future readers.

@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  --theme-primary: #4f46e5;
+  --theme-secondary: #60a5fa;
+  --theme-surface: #1e293b;
+  --theme-background: #0f172a;
+  --theme-text: #f8fafc;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--theme-background);
+  color: var(--theme-text);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button.theme-button {
+  background: var(--theme-primary);
+  color: var(--theme-text);
+  border: 1px solid transparent;
+  border-radius: 9999px;
+  padding: 0.75rem 1.25rem;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+button.theme-button:hover {
+  background: var(--theme-secondary);
+}
+
+button.theme-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.theme-card,
+.theme-surface {
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.theme-card {
+  border-radius: 1.25rem;
+}
+
+.theme-surface {
+  border-radius: 1rem;
+}
+
+.theme-border {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+input,
+textarea,
+select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--theme-text);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(248, 250, 252, 0.7);
+}
+
+::selection {
+  background: rgba(79, 70, 229, 0.25);
+  color: var(--theme-text);
+}
+
+.menu-button {
+  background-color: var(--theme-secondary);
+  color:  var(--theme-text);
+  stroke: white;
+  border: 1px solid transparent;
+  border-color: transparent;
+  border-radius: 8px
+}
