@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Friend = {
   id: string;
@@ -11,12 +12,16 @@ type Friend = {
 
 interface FriendsListProps {
   friends: Friend[];
-  onFriendClick?: (friend: Friend) => void;
+  // second param allows callers to request a fresh conversation
+  onFriendClick?: (friend: Friend, opts?: { forceNew?: boolean }) => void;
 }
 
 export default function FriendsList({ friends, onFriendClick }: FriendsListProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [openMenuFor, setOpenMenuFor] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   if (friends.length === 0) {
     return null;
@@ -54,12 +59,17 @@ export default function FriendsList({ friends, onFriendClick }: FriendsListProps
                 marginBottom: 4,
                 background: selectedFriendId === friend.id ? "rgba(59, 130, 246, 0.2)" : "rgba(255,255,255,0.03)",
                 border: selectedFriendId === friend.id ? "1px solid rgba(59, 130, 246, 0.5)" : "1px solid transparent",
-                cursor: onFriendClick ? "pointer" : "default",
+                cursor: "pointer",
                 transition: "all 0.2s ease",
               }}
               onClick={() => {
                 setSelectedFriendId(friend.id);
-                onFriendClick?.(friend);
+                // set a search param to let the conversations list filter by friend
+                const params = new URLSearchParams(Array.from(searchParams.entries()));
+                params.set("f", friend.id);
+                // clear selected conversation when changing friend
+                params.delete("c");
+                router.push(`/?${params.toString()}`);
               }}
             >
               <div
@@ -95,6 +105,64 @@ export default function FriendsList({ friends, onFriendClick }: FriendsListProps
                 <div style={{ fontWeight: 500, fontSize: "0.9em" }}>
                   {friend.username || "Unnamed"}
                 </div>
+              </div>
+
+              {/* 3-dot menu button */}
+              <div style={{ position: "relative" }}>
+                <button
+                  aria-label={`Options for ${friend.username || "friend"}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenMenuFor(openMenuFor === friend.id ? null : friend.id);
+                  }}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "var(--theme-text)",
+                    cursor: "pointer",
+                    padding: 6,
+                    borderRadius: 6,
+                  }}
+                >
+                  ⋯
+                </button>
+
+                {openMenuFor === friend.id && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "110%",
+                      background: "var(--theme-surface)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 8,
+                      padding: 8,
+                      minWidth: 160,
+                      zIndex: 40,
+                    }}
+                  >
+                    <button
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        padding: "8px 6px",
+                        borderRadius: 6,
+                        cursor: "pointer",
+                      }}
+                      onClick={async () => {
+                        setOpenMenuFor(null);
+                        // delegate to parent handler to create/open conversation
+                        onFriendClick?.(friend, { forceNew: true });
+                      }}
+                    >
+                      Start conversation
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}

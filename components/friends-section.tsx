@@ -69,12 +69,13 @@ export default function FriendsSection() {
 
   const router = useRouter();
 
-  const handleFriendClick = async (friend: Friend) => {
+  const handleFriendClick = async (friend: Friend, opts?: { forceNew?: boolean }) => {
+    const forceNew = opts?.forceNew === true;
     try {
       const response = await fetch("/api/conversations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ other_user_id: friend.id }),
+        body: JSON.stringify({ other_user_id: friend.id, force_new: forceNew }),
       });
 
       const data = await response.json();
