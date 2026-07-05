@@ -1,4 +1,5 @@
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
@@ -44,15 +45,19 @@ export async function POST(request: NextRequest) {
     if (forceNew) {
       console.log("Force-creating a new conversation for user:", user.id, "with:", other_user_id);
 
-      // Create a new conversations row
-      const { data: convData, error: convError } = await supabase
-        .from("conversations")
-        .insert({ is_group: false, title: null })
-        .select("id")
-        .single();
+      // Use the admin client to bypass RLS for creation
+      try {
+        const admin = supabaseAdmin();
 
-      if (convError || !convData?.id) {
-          console.error("Failed to create conversation row:", convError, convData);
+        // Create a new conversations row
+        const { data: convData, error: convError } = await admin
+          .from("conversations")
+          .insert({ is_group: false, title: null })
+          .select("id")
+          .single();
+
+        if (convError || !convData?.id) {
+          console.error("Failed to create conversation row (admin):", convError, convData);
           return NextResponse.json(
             { error: "Failed to create conversation", details: JSON.stringify(convError || convData) },
             { status: 500 }
@@ -62,7 +67,7 @@ export async function POST(request: NextRequest) {
         const newConvId = String((convData as any).id);
 
         // Insert members for both users
-        const { data: membersData, error: membersError } = await supabase
+        const { data: membersData, error: membersError } = await admin
           .from("conversation_members")
           .insert([
             { conversation_id: newConvId, user_id: user.id },
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest) {
           ]);
 
         if (membersError) {
-          console.error("Failed to insert conversation members:", membersError, membersData);
+          console.error("Failed to insert conversation members (admin):", membersError, membersData);
           return NextResponse.json(
             { error: "Failed to add members", details: JSON.stringify(membersError) },
             { status: 500 }
@@ -78,6 +83,10 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({ conversation_id: newConvId }, { status: 201 });
+      } catch (err) {
+        console.error("Admin client error while creating conversation:", err);
+        return NextResponse.json({ error: "Admin client error", details: String(err) }, { status: 500 });
+      }
     }
 
     // Use the database function to get or create the conversation (default behavior)
