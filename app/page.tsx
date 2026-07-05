@@ -35,7 +35,7 @@ type Message = {
 export default async function HomePage({
     searchParams,
 }: {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; f?: string }>;
 }) {
   const params = await searchParams;
   
@@ -55,61 +55,43 @@ export default async function HomePage({
     .eq("id", user.id)
     .single<Profile>();
 
-  type MembershipRow = {
-    conversation_id: string;
-    conversations: Conversation | null;
-  };
+  // 5) We now store messages in the existing messages table by conversation_id.
+  // If URL has ?f=<friendId>, load the one-on-one DM and its history.
+  const selectedFriendId = params.f ? decodeURIComponent(params.f) : null;
 
-  const { data: memberships } = await supabase
-    .from("conversation_members")
-    .select(`
-      conversation_id,
-      conversations (
-        id,
-        is_group,
-        title,
-        created_at
-      )
-    `)
-    .eq("user_id", user.id);
-
-  const convRows = (memberships || []) as unknown as MembershipRow[];
-  const conversations: Conversation[] =
-    convRows.map((m) => m.conversations!).filter(Boolean);
-    
-   // 5) Choose an "active conversation"
-  // - If URL has ?c=..., use that
-  // - else use the first conversation
-  const activeConversationId =
-    params.c ? decodeURIComponent(params.c) : conversations[0]?.id || null;
-
-  // 6) Load messages for the active conversation (if any)
   let messages: Message[] = [];
   let activeMembers: Profile[] = [];
+  let conversationId: string | null = null;
 
-  if (activeConversationId) {
-    // Messages + sender profile (nested join via FK messages.sender_id -> profiles.id)
-    // Messages + sender profile
-    const { data: msgData } = await supabase
-      .from("messages")
-      .select("id, content, created_at, sender_id, sender:profiles(id,username,avatar_url)")
-      .eq("conversation_id", activeConversationId)
-      .order("created_at", { ascending: true })
-      .limit(50);
+  if (selectedFriendId) {
+    const { data: conversationData, error: conversationError } = await supabase.rpc("get_or_create_dm", {
+      other_user_id: selectedFriendId,
+    });
 
-    messages = ((msgData || []) as unknown) as Message[];
+    if (conversationError) {
+      console.error("Error finding or creating DM conversation:", conversationError);
+    } else {
+      conversationId = conversationData as string;
+    }
 
-    // Members in this conversation (so we can show header / participants)
-    type MemberRow = { user: Profile };
-    const { data: memberData } = await supabase
-      .from("conversation_members")
-      .select("user:profiles(id,username,avatar_url)")
-      .eq("conversation_id", activeConversationId);
+    if (conversationId) {
+      const { data: msgData } = await supabase
+        .from("messages")
+        .select("id, content, created_at, sender_id, sender:profiles(id,username,avatar_url)")
+        .eq("conversation_id", conversationId)
+        .order("created_at", { ascending: true })
+        .limit(200);
 
-    activeMembers =
-      (((memberData || []) as unknown) as MemberRow[])
-        .map((row) => row.user)
-        .filter((u): u is Profile => Boolean(u));
+      messages = ((msgData || []) as unknown) as Message[];
+    }
+
+    const { data: friendProfile } = await supabase
+      .from("profiles")
+      .select("id, username, avatar_url")
+      .eq("id", selectedFriendId)
+      .single<Profile>();
+
+    activeMembers = [meProfile].concat(friendProfile ? [friendProfile] : []);
   }
 
   // ---------- UI ----------
@@ -148,7 +130,7 @@ export default async function HomePage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "280px 320px 1fr",
+          gridTemplateColumns: "280px 1fr",
           gap: 12,
           height: "75vh",
         }}
@@ -159,60 +141,15 @@ export default async function HomePage({
           <FriendsSection />
         </div>
 
-        {/* MIDDLE: CONVERSATIONS */}
-        <section className="theme-card" style={panelStyle}>
-          <h2 style={panelTitle}>Conversations</h2>
-          <p style={panelHint}>
-            Click a conversation to load messages
-          </p>
-
-          <div style={{ overflow: "auto" }}>
-            {conversations.length === 0 && (
-              <div style={{ opacity: 0.8 }}>
-                No conversations yet.
-                <br />
-                Next step: create one when you click a user.
-              </div>
-            )}
-
-            {conversations.map((c) => {
-              const isActive = c.id === activeConversationId;
-
-              return (
-                <Link
-                  key={c.id}
-                  href={`/?c=${c.id}`}
-                  style={{
-                    ...listRow,
-                    textDecoration: "none",
-                    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                  }}
-                >
-                  <div style={avatarStyle}>
-                    {(c.title || "C").slice(0, 1).toUpperCase()}
-                  </div>
-
-                  <div>
-                    <div style={{ fontWeight: 700 }}>
-                      {c.title || (c.is_group ? "Group chat" : "Direct message")}
-                    </div>
-                    <div style={{ fontSize: 12, opacity: 0.75 }}>
-                      {new Date(c.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
+        {/* conversations column removed - using friend-based messages instead */}
 
         {/* RIGHT: MESSAGES */}
         <section className="theme-card" style={{ ...panelStyle, display: "flex", flexDirection: "column" }}>
           <h2 style={panelTitle}>Messages</h2>
 
-          {!activeConversationId ? (
+          {!selectedFriendId ? (
             <div style={{ opacity: 0.8, flex: 1 }}>
-              Select a conversation to view messages.
+              Select a friend to view messages.
             </div>
           ) : (
             <>
@@ -227,13 +164,13 @@ export default async function HomePage({
 
               <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
                 <MessageList
-                  key={activeConversationId} // remount when conversation changes
-                  conversationId={activeConversationId}
+                  key={conversationId || selectedFriendId} // remount when selected friend or conversation changes
+                  conversationId={conversationId}
                   initialMessages={messages}
                   currentUserId={user.id}
                 />
 
-                <MessageInput conversationId={activeConversationId} />
+                <MessageInput friendId={selectedFriendId!} />
               </div>
             </>
           )}

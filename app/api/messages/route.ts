@@ -15,61 +15,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { conversation_id, content } = await request.json();
+    const { recipient_id, content } = await request.json();
 
-    // simple sanity check – we expect a uuid string
-    if (
-      !conversation_id ||
-      typeof conversation_id !== "string" ||
-      !/^[0-9a-fA-F-]{36}$/.test(conversation_id)
-    ) {
-      console.warn("Invalid conversation_id received:", conversation_id);
-      return NextResponse.json(
-        { error: "conversation_id and content are required" },
-        { status: 400 }
-      );
+    if (!recipient_id || typeof recipient_id !== "string") {
+      return NextResponse.json({ error: "recipient_id is required" }, { status: 400 });
     }
 
     if (!content || !content.trim()) {
+      return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
+    }
+
+    // Use the existing DM helper to find or create the one-on-one conversation.
+    const { data: conversationId, error: convoError } = await supabase.rpc("get_or_create_dm", {
+      other_user_id: recipient_id,
+    });
+
+    if (convoError || !conversationId) {
+      console.error("Error locating or creating conversation:", convoError);
       return NextResponse.json(
-        { error: "Message cannot be empty" },
-        { status: 400 }
+        { error: "Failed to locate or create conversation", details: JSON.stringify(convoError) },
+        { status: 500 }
       );
     }
 
-    // Verify user is a member of this conversation
-    console.log("Checking membership for user", user.id, "conversation", conversation_id);
-    const { data: memberCheck, error: memberError } = await supabase
-      .from("conversation_members")
-      // conversation_members doesn’t have its own id column – just use
-      // conversation_id (or *) so the select succeeds
-      .select("conversation_id")
-      .eq("conversation_id", conversation_id)
-      .eq("user_id", user.id)
-      .single();
-
-    console.log("membership query result", { memberCheck, memberError });
-
-    if (memberError || !memberCheck) {
-      // include some diagnostic info for development
-      return NextResponse.json(
-        {
-          error: "Not a member of this conversation",
-          details: {
-            conversation_id,
-            memberCheck,
-            memberError: memberError?.message || memberError,
-          },
-        },
-        { status: 403 }
-      );
-    }
-
-    // Insert the message
     const { data: newMessage, error: insertError } = await supabase
       .from("messages")
       .insert({
-        conversation_id,
+        conversation_id: conversationId,
         sender_id: user.id,
         content: content.trim(),
       })
@@ -79,15 +51,12 @@ export async function POST(request: NextRequest) {
     if (insertError || !newMessage) {
       console.error("Error sending message:", insertError);
       return NextResponse.json(
-        { error: "Failed to send message", details: insertError?.message },
+        { error: "Failed to send message", details: JSON.stringify(insertError) },
         { status: 500 }
       );
     }
 
-    return NextResponse.json(
-      { message_id: newMessage.id },
-      { status: 201 }
-    );
+    return NextResponse.json({ message_id: newMessage.id }, { status: 201 });
   } catch (error) {
     console.error("Unexpected error:", error);
     return NextResponse.json(

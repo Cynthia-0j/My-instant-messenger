@@ -3,19 +3,19 @@
 import { useState } from "react";
 
 interface MessageInputProps {
-  conversationId: string;
+  friendId: string;
 }
 
-export default function MessageInput({ conversationId }: MessageInputProps) {
+export default function MessageInput({ friendId }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSend = async () => {
     if (!message.trim()) return;
 
-    // ensure conversationId still looks like a uuid
-    if (!conversationId || !/^[0-9a-fA-F-]{36}$/.test(conversationId)) {
-      alert("Invalid conversation identifier, please reload the page.");
+    // ensure friendId looks like a non-empty string
+    if (!friendId || typeof friendId !== "string") {
+      alert("Invalid friend selected, please reload the page.");
       return;
     }
 
@@ -27,7 +27,7 @@ export default function MessageInput({ conversationId }: MessageInputProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          conversation_id: conversationId,
+          recipient_id: friendId,
           content: message,
         }),
       });

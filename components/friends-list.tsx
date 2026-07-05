@@ -157,22 +157,14 @@ export default function FriendsList({ friends, onFriendClick }: FriendsListProps
                         borderRadius: 6,
                         cursor: "pointer",
                       }}
-                      onClick={async () => {
-                          setOpenMenuFor(null);
-                          // delegate to parent handler to create/open conversation
-                          try {
-                            const result = await onFriendClick?.(friend, { forceNew: true });
-                            const cid = result ? String(result) : null;
-                            if (cid) {
-                              // navigate directly to the newly created conversation
-                              router.push(`/?c=${encodeURIComponent(cid)}`);
-                            }
-                          } catch (err) {
-                            console.error('Error starting conversation from menu', err);
-                          }
-                        }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuFor(null);
+                        // Open the friend's profile page
+                        router.push(`/profile?u=${encodeURIComponent(friend.id)}`);
+                      }}
                     >
-                      Start conversation
+                      View profile
                     </button>
                   </div>
                 )}

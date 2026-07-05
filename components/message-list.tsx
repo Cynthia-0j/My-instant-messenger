@@ -15,11 +15,12 @@ export type Message = {
   content: string;
   created_at: string;
   sender_id: string;
+  conversation_id: string;
   sender?: Profile | null;
 };
 
 interface MessageListProps {
-  conversationId: string;
+  conversationId: string | null;
   initialMessages: Message[];
   currentUserId: string;
 }
@@ -47,7 +48,7 @@ export default function MessageList({
     // use the shared browser client for realtime
     const supabase = supabaseBrowser();
 
-    const channel = supabase.channel(`public:messages:${conversationId}`);
+    const channel = supabase.channel(`public:messages`);
     channelRef.current = channel;
 
     channel.on(
@@ -56,11 +57,12 @@ export default function MessageList({
         event: "INSERT",
         schema: "public",
         table: "messages",
-        filter: `conversation_id=eq.${conversationId}`,
       },
       (payload: RealtimePostgresChangesPayload<Message>) => {
-        console.log("realtime payload received", payload);
-        setMessages((prev) => [...prev, payload.new as Message]);
+        const m = payload.new as Message;
+        if (m.conversation_id === conversationId) {
+          setMessages((prev) => [...prev, m]);
+        }
       }
     );
 

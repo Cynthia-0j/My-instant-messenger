@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabaseBrowser } from "../../lib/supabase/client";
 import { getCookie, setCookie } from "../../lib/cookies";
@@ -56,6 +57,7 @@ const generateThemeFromColor = (color: string) => ({
 });
 
 export default function MyProfile() {
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -68,6 +70,7 @@ export default function MyProfile() {
   const [newContact, setNewContact] = useState("");
   const [newAge, setNewAge] = useState("");
   const [newLocation, setNewLocation] = useState("");
+  const viewUserId = searchParams?.get('u');
   const [themeColor, setThemeColor] = useState(() => {
     if (typeof window === 'undefined') return '#4f46e5';
     return getCookie('theme_color') || '#4f46e5';
@@ -77,12 +80,31 @@ export default function MyProfile() {
     return getCookie('theme_text_color') || '#f8fafc';
   });
   const themePreview = { ...generateThemeFromColor(themeColor), text: themeTextColor };
+  const isOwnProfile = !viewUserId || viewUserId === user?.id;
+
   useEffect(() => {
     async function fetchUserAndProfile() {
       const { data: { user } } = await supabaseBrowser().auth.getUser();
       setUser(user);
-
-      if (user) {
+      // If `u` query param is provided, view that user's profile instead
+      if (viewUserId) {
+        const { data: otherProfile } = await supabaseBrowser()
+          .from('profiles')
+          .select('*')
+          .eq('id', viewUserId)
+          .single();
+        setProfile(otherProfile);
+        setNewUsername(otherProfile?.username || "");
+        setNewContact(otherProfile?.email || "");
+        setNewAge(otherProfile?.age?.toString() || "");
+        setNewLocation(otherProfile?.location || "");
+        if (otherProfile?.theme_color) {
+          setThemeColor(otherProfile.theme_color);
+        }
+        if (otherProfile?.theme_text_color) {
+          setThemeTextColor(otherProfile.theme_text_color);
+        }
+      } else if (user) {
         const { data: profile } = await supabaseBrowser()
           .from('profiles')
           .select('*')
@@ -104,7 +126,14 @@ export default function MyProfile() {
     }
 
     fetchUserAndProfile();
-  }, []);
+  }, [viewUserId]);
+
+  useEffect(() => {
+    if (!isOwnProfile) {
+      setEditing(false);
+      setEditingContact(false);
+    }
+  }, [isOwnProfile]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -292,59 +321,61 @@ export default function MyProfile() {
                 <p> I love Anime and cosplay and having fun with my friends </p>
 
                   <div className="mt-5 flex gap-3">
-                    {editing ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleSave}
-                          disabled={saving}
-                          className="theme-button"
-                          style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}
-                        >
-                          {saving ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancel}
-                          className="theme-button"
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            color: 'var(--theme-text)',
-                            padding: '0.75rem 1rem',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={handleEdit}
-                          className="theme-button"
-                          style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}
-                        >
-                          Edit profile
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleChangePhoto}
-                          disabled={uploading}
-                          className="theme-button"
-                          style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                            color: 'var(--theme-text)',
-                            padding: '0.75rem 1rem',
-                            fontSize: '0.875rem',
-                          }}
-                        >
-                          {uploading ? "Uploading..." : "Change photo"}
-                        </button>
-                      </>
-                    )}
+                    {isOwnProfile ? (
+                      editing ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleSave}
+                            disabled={saving}
+                            className="theme-button"
+                            style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}
+                          >
+                            {saving ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="theme-button"
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              color: 'var(--theme-text)',
+                              padding: '0.75rem 1rem',
+                              fontSize: '0.875rem',
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleEdit}
+                            className="theme-button"
+                            style={{ padding: '0.75rem 1rem', fontSize: '0.875rem' }}
+                          >
+                            Edit profile
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleChangePhoto}
+                            disabled={uploading}
+                            className="theme-button"
+                            style={{
+                              background: 'transparent',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              color: 'var(--theme-text)',
+                              padding: '0.75rem 1rem',
+                              fontSize: '0.875rem',
+                            }}
+                          >
+                            {uploading ? "Uploading..." : "Change photo"}
+                          </button>
+                        </>
+                      )
+                    ) : null}
                   </div>
 
 
@@ -356,7 +387,7 @@ export default function MyProfile() {
                   <div className="theme-card mt-8 shadow-2xl p-6">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-xl font-semibold">Contact Details</h2>
-                      {!editingContact && (
+                      {isOwnProfile && !editingContact && (
                         <button
                           type="button"
                           onClick={handleEditContact}
@@ -425,23 +456,31 @@ export default function MyProfile() {
                         <div className="flex items-center gap-3">
                           <div className="flex flex-col items-center">
                             <label className="text-xs mb-1" style={{ color: 'rgba(248,250,252,0.75)' }}>Primary</label>
-                            <input
-                              type="color"
-                              value={themeColor}
-                              onChange={(e) => setThemeColor(e.target.value)}
-                              className="h-12 w-12 rounded-full"
-                              style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'transparent' }}
-                            />
+                            {isOwnProfile ? (
+                              <input
+                                type="color"
+                                value={themeColor}
+                                onChange={(e) => setThemeColor(e.target.value)}
+                                className="h-12 w-12 rounded-full"
+                                style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'transparent' }}
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-full" style={{ backgroundColor: themeColor, border: '1px solid rgba(255,255,255,0.15)' }} />
+                            )}
                           </div>
                           <div className="flex flex-col items-center">
                             <label className="text-xs mb-1" style={{ color: 'rgba(248,250,252,0.75)' }}>Text</label>
-                            <input
-                              type="color"
-                              value={themeTextColor}
-                              onChange={(e) => setThemeTextColor(e.target.value)}
-                              className="h-12 w-12 rounded-full"
-                              style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'transparent' }}
-                            />
+                            {isOwnProfile ? (
+                              <input
+                                type="color"
+                                value={themeTextColor}
+                                onChange={(e) => setThemeTextColor(e.target.value)}
+                                className="h-12 w-12 rounded-full"
+                                style={{ border: '1px solid rgba(255,255,255,0.15)', background: 'transparent' }}
+                              />
+                            ) : (
+                              <div className="h-12 w-12 rounded-full" style={{ backgroundColor: themeTextColor, border: '1px solid rgba(255,255,255,0.15)' }} />
+                            )}
                           </div>
                         </div>
                       </div>
