@@ -52,32 +52,32 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (convError || !convData?.id) {
-        console.error("Failed to create conversation row:", convError);
-        return NextResponse.json(
-          { error: "Failed to create conversation", details: convError?.message },
-          { status: 500 }
-        );
-      }
+          console.error("Failed to create conversation row:", convError, convData);
+          return NextResponse.json(
+            { error: "Failed to create conversation", details: JSON.stringify(convError || convData) },
+            { status: 500 }
+          );
+        }
 
-      const newConvId = String((convData as any).id);
+        const newConvId = String((convData as any).id);
 
-      // Insert members for both users
-      const { error: membersError } = await supabase
-        .from("conversation_members")
-        .insert([
-          { conversation_id: newConvId, user_id: user.id },
-          { conversation_id: newConvId, user_id: other_user_id },
-        ]);
+        // Insert members for both users
+        const { data: membersData, error: membersError } = await supabase
+          .from("conversation_members")
+          .insert([
+            { conversation_id: newConvId, user_id: user.id },
+            { conversation_id: newConvId, user_id: other_user_id },
+          ]);
 
-      if (membersError) {
-        console.error("Failed to insert conversation members:", membersError);
-        return NextResponse.json(
-          { error: "Failed to add members", details: membersError.message },
-          { status: 500 }
-        );
-      }
+        if (membersError) {
+          console.error("Failed to insert conversation members:", membersError, membersData);
+          return NextResponse.json(
+            { error: "Failed to add members", details: JSON.stringify(membersError) },
+            { status: 500 }
+          );
+        }
 
-      return NextResponse.json({ conversation_id: newConvId }, { status: 201 });
+        return NextResponse.json({ conversation_id: newConvId }, { status: 201 });
     }
 
     // Use the database function to get or create the conversation (default behavior)
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     if (createError || !conversationId) {
       console.error("Error getting or creating conversation:", createError, "raw data:", data);
       return NextResponse.json(
-        { error: "Failed to create conversation", details: createError?.message },
+        { error: "Failed to create conversation", details: JSON.stringify(createError || data) },
         { status: 500 }
       );
     }
@@ -99,8 +99,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ conversation_id: conversationId }, { status: 201 });
   } catch (error) {
     console.error("Unexpected error in conversation route:", error);
+    const details = error instanceof Error ? { message: error.message, stack: error.stack } : String(error);
     return NextResponse.json(
-      { error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
+      { error: "Internal server error", details },
       { status: 500 }
     );
   }
